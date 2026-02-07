@@ -18,7 +18,7 @@ const loadGoogleMaps = (apiKey) => {
 
       const map = document.createElement('script');
       map.id = 'google-maps-js';
-      map.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+      map.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,marker`;
       map.async = true;
       map.defer = true;
       map.onload = () => resolve(window.google.maps);
@@ -51,6 +51,7 @@ function MapComponent({ places, userLocation }) {
         const mapInstance = new google.maps.Map(mapRef.current, {
           center: userLocation || { lat: 38.7946, lng: -106.5348 },
           zoom: 12,
+          mapId: "DEMO_MAP_ID", // Required for AdvancedMarkerElement
           mapTypeControl: false,
           fullscreenControl: false,
           streetViewControl: false
@@ -84,36 +85,42 @@ function MapComponent({ places, userLocation }) {
     if (!map) return;
 
     // Clear existing markers
-    markers.forEach(marker => marker.setMap(null));
+    markers.forEach(marker => {
+      if (marker.map) {
+        marker.map = null;
+      }
+    });
 
     // Add user location marker
     const newMarkers = [];
     if (userLocation) {
-      const userMarker = new google.maps.Marker({
+      const userMarker = new google.maps.marker.AdvancedMarkerElement({
         position: userLocation,
         map: map,
         title: 'Your Location',
-        icon: {
-          url: 'data:image/svg+xml;charset=UTF-8,%3Csvg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="%234285F4"%3E%3Ccircle cx="12" cy="12" r="8"/%3E%3C/svg%3E',
-          scaledSize: new google.maps.Size(24, 24)
-        }
+        content: new google.maps.marker.PinElement({
+          background: "#4285F4",
+          borderColor: "#ffffff",
+          glyphColor: "#ffffff"
+        }).element
       });
       newMarkers.push(userMarker);
     }
 
     // Add compactor markers (orange/yellow)
     compactors.forEach((compactor) => {
-      const marker = new google.maps.Marker({
+      const marker = new google.maps.marker.AdvancedMarkerElement({
         position: {
           lat: compactor.lat,
           lng: compactor.lng
         },
         map: map,
         title: compactor.name,
-        icon: {
-          url: 'data:image/svg+xml;charset=UTF-8,%3Csvg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="%23FF9800"%3E%3Cpath d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/%3E%3C/svg%3E',
-          scaledSize: new google.maps.Size(24, 24)
-        }
+        content: new google.maps.marker.PinElement({
+          background: "#FF9800",
+          borderColor: "#ffffff",
+          glyphColor: "#ffffff"
+        }).element
       });
 
       // Add info window for compactors
@@ -144,17 +151,18 @@ function MapComponent({ places, userLocation }) {
           ? place.geometry.location.lng()
           : place.geometry?.location?.lng;
 
-        const marker = new google.maps.Marker({
+        const marker = new google.maps.marker.AdvancedMarkerElement({
           position: {
             lat: latValue,
             lng: lngValue
           },
           map: map,
           title: place.name,
-          icon: {
-            url: 'data:image/svg+xml;charset=UTF-8,%3Csvg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="%23EA4335"%3E%3Cpath d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/%3E%3C/svg%3E',
-            scaledSize: new google.maps.Size(24, 24)
-          }
+          content: new google.maps.marker.PinElement({
+            background: "#EA4335",
+            borderColor: "#ffffff",
+            glyphColor: "#ffffff"
+          }).element
         });
 
         // Add info window
@@ -182,7 +190,10 @@ function MapComponent({ places, userLocation }) {
     // Fit map to show all markers
     if (newMarkers.length > 0) {
       const bounds = new google.maps.LatLngBounds();
-      newMarkers.forEach(marker => bounds.extend(marker.getPosition()));
+      newMarkers.forEach(marker => {
+        // AdvancedMarkerElement uses .position property instead of .getPosition()
+        bounds.extend(marker.position);
+      });
       map.fitBounds(bounds);
     }
   }, [map, places, userLocation, compactors]);
