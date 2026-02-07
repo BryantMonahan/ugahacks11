@@ -1,5 +1,35 @@
 import { useEffect, useRef, useState } from 'react';
 
+let googleMapsLoaderPromise;
+
+const loadGoogleMaps = (apiKey) => {
+  if (window.google?.maps) {
+    return Promise.resolve(window.google.maps);
+  }
+
+  if (!googleMapsLoaderPromise) {
+    googleMapsLoaderPromise = new Promise((resolve, reject) => {
+      const existingMap = document.getElementById('google-maps-js');
+      if (existingMap) {
+        existingMap.addEventListener('load', () => resolve(window.google.maps));
+        existingMap.addEventListener('error', reject);
+        return;
+      }
+
+      const map = document.createElement('script');
+      map.id = 'google-maps-js';
+      map.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+      map.async = true;
+      map.defer = true;
+      map.onload = () => resolve(window.google.maps);
+      map.onerror = reject;
+      document.head.appendChild(map);
+    });
+  }
+
+  return googleMapsLoaderPromise;
+};
+
 function MapComponent({ places, userLocation }) {
   const mapRef = useRef(null);
   const [map, setMap] = useState(null);
@@ -13,23 +43,10 @@ function MapComponent({ places, userLocation }) {
         return;
       }
 
-      // Load Google Maps JavaScript API
-      if (!window.google) {
-        const script = document.createElement('script');
-        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
-        script.async = true;
-        script.defer = true;
-        
-        script.onload = () => {
-          initializeMap();
-        };
-        
-        document.head.appendChild(script);
-      } else {
-        initializeMap();
-      }
+      try {
+        await loadGoogleMaps(apiKey);
+        if (!mapRef.current || map) return;
 
-      function initializeMap() {
         const mapInstance = new google.maps.Map(mapRef.current, {
           center: userLocation || { lat: 38.7946, lng: -106.5348 },
           zoom: 12,
@@ -39,11 +56,18 @@ function MapComponent({ places, userLocation }) {
         });
 
         setMap(mapInstance);
+      } catch (error) {
+        console.error('Failed to load Google Maps', error);
       }
     };
 
     initMap();
-  }, [userLocation]);
+  }, [map, userLocation]);
+
+  useEffect(() => {
+    if (!map || !userLocation) return;
+    map.setCenter(userLocation);
+  }, [map, userLocation]);
 
   // Add markers when places change
   useEffect(() => {
@@ -68,11 +92,18 @@ function MapComponent({ places, userLocation }) {
     }
 
     // Add place markers
-    places.forEach((place, index) => {
+    places.forEach((place) => {
+      const latValue = typeof place.geometry?.location?.lat === 'function'
+        ? place.geometry.location.lat()
+        : place.geometry?.location?.lat;
+      const lngValue = typeof place.geometry?.location?.lng === 'function'
+        ? place.geometry.location.lng()
+        : place.geometry?.location?.lng;
+
       const marker = new google.maps.Marker({
         position: {
-          lat: place.geometry?.location?.lat,
-          lng: place.geometry?.location?.lng
+          lat: latValue,
+          lng: lngValue
         },
         map: map,
         title: place.name,
