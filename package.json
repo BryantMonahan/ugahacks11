@@ -1,0 +1,21 @@
+{
+  "name": "ugahacks11",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "cd backend && npm run start"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BryantMonahan/ugahacks11.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/BryantMonahan/ugahacks11/issues"
+  },
+  "homepage": "https://github.com/BryantMonahan/ugahacks11#readme"
+}
