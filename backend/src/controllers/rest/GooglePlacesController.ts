@@ -56,6 +56,19 @@ export class GooglePlacesController {
     return distances.map(loc => loc.distance = loc.distance * 3.28084).slice(0, 5)
   }
 
+  @Get('/compactors')
+  getAllCompactors() {
+    return {
+      compactors: this.compactCoords.map((coords, index) => ({
+        id: index + 1,
+        lat: coords[0],
+        lng: coords[1],
+        name: `Compactor ${index + 1}`
+      })),
+      count: this.compactCoords.length
+    }
+  }
+
   compactCoords = [
     [33.957694, -83.375056],
     [33.956583, -83.375028],

@@ -34,6 +34,7 @@ function MapComponent({ places, userLocation }) {
   const mapRef = useRef(null);
   const [map, setMap] = useState(null);
   const [markers, setMarkers] = useState([]);
+  const [compactors, setCompactors] = useState([]);
 
   useEffect(() => {
     const initMap = async () => {
@@ -56,6 +57,15 @@ function MapComponent({ places, userLocation }) {
         });
 
         setMap(mapInstance);
+
+        // Fetch compactor locations
+        try {
+          const response = await fetch('http://localhost:8083/rest/places/compactors');
+          const data = await response.json();
+          setCompactors(data.compactors || []);
+        } catch (error) {
+          console.error('Failed to fetch compactors:', error);
+        }
       } catch (error) {
         console.error('Failed to load Google Maps', error);
       }
@@ -69,9 +79,9 @@ function MapComponent({ places, userLocation }) {
     map.setCenter(userLocation);
   }, [map, userLocation]);
 
-  // Add markers when places change
+  // Add markers when places or compactors change
   useEffect(() => {
-    if (!map || !places.length) return;
+    if (!map) return;
 
     // Clear existing markers
     markers.forEach(marker => marker.setMap(null));
@@ -91,36 +101,28 @@ function MapComponent({ places, userLocation }) {
       newMarkers.push(userMarker);
     }
 
-    // Add place markers
-    places.forEach((place) => {
-      const latValue = typeof place.geometry?.location?.lat === 'function'
-        ? place.geometry.location.lat()
-        : place.geometry?.location?.lat;
-      const lngValue = typeof place.geometry?.location?.lng === 'function'
-        ? place.geometry.location.lng()
-        : place.geometry?.location?.lng;
-
+    // Add compactor markers (orange/yellow)
+    compactors.forEach((compactor) => {
       const marker = new google.maps.Marker({
         position: {
-          lat: latValue,
-          lng: lngValue
+          lat: compactor.lat,
+          lng: compactor.lng
         },
         map: map,
-        title: place.name,
+        title: compactor.name,
         icon: {
-          url: 'data:image/svg+xml;charset=UTF-8,%3Csvg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="%23EA4335"%3E%3Cpath d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/%3E%3C/svg%3E',
+          url: 'data:image/svg+xml;charset=UTF-8,%3Csvg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="%23FF9800"%3E%3Cpath d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/%3E%3C/svg%3E',
           scaledSize: new google.maps.Size(24, 24)
         }
       });
 
-      // Add info window
+      // Add info window for compactors
       const infoWindow = new google.maps.InfoWindow({
         content: `
           <div>
-            <strong>${place.name}</strong><br>
-            ${place.vicinity || place.formatted_address}<br>
-            Rating: ${place.rating || 'N/A'}
-            ${place.opening_hours ? `<br>${place.opening_hours.open_now ? 'Open Now' : 'Closed'}` : ''}
+            <strong>${compactor.name}</strong><br>
+            <em>Compactor Location</em><br>
+            Coordinates: ${compactor.lat.toFixed(6)}, ${compactor.lng.toFixed(6)}
           </div>
         `
       });
@@ -132,6 +134,49 @@ function MapComponent({ places, userLocation }) {
       newMarkers.push(marker);
     });
 
+    // Add waste center place markers (red)
+    if (places && places.length > 0) {
+      places.forEach((place) => {
+        const latValue = typeof place.geometry?.location?.lat === 'function'
+          ? place.geometry.location.lat()
+          : place.geometry?.location?.lat;
+        const lngValue = typeof place.geometry?.location?.lng === 'function'
+          ? place.geometry.location.lng()
+          : place.geometry?.location?.lng;
+
+        const marker = new google.maps.Marker({
+          position: {
+            lat: latValue,
+            lng: lngValue
+          },
+          map: map,
+          title: place.name,
+          icon: {
+            url: 'data:image/svg+xml;charset=UTF-8,%3Csvg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="%23EA4335"%3E%3Cpath d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/%3E%3C/svg%3E',
+            scaledSize: new google.maps.Size(24, 24)
+          }
+        });
+
+        // Add info window
+        const infoWindow = new google.maps.InfoWindow({
+          content: `
+            <div>
+              <strong>${place.name}</strong><br>
+              ${place.vicinity || place.formatted_address}<br>
+              Rating: ${place.rating || 'N/A'}
+              ${place.opening_hours ? `<br>${place.opening_hours.open_now ? 'Open Now' : 'Closed'}` : ''}
+            </div>
+          `
+        });
+
+        marker.addListener('click', () => {
+          infoWindow.open(map, marker);
+        });
+
+        newMarkers.push(marker);
+      });
+    }
+
     setMarkers(newMarkers);
 
     // Fit map to show all markers
@@ -140,7 +185,7 @@ function MapComponent({ places, userLocation }) {
       newMarkers.forEach(marker => bounds.extend(marker.getPosition()));
       map.fitBounds(bounds);
     }
-  }, [map, places, userLocation]);
+  }, [map, places, userLocation, compactors]);
 
   return <div ref={mapRef} style={{ width: '100%', height: '400px' }} />;
 }
