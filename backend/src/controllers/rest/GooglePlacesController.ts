@@ -53,7 +53,7 @@ export class GooglePlacesController {
       distances.push({ distance, coords: [coords[0], coords[1]] })
     }
     distances = distances.sort((a, b) => a.distance - b.distance)
-    return distances.slice(0, 5)
+    return distances.map(loc => loc.distance = loc.distance * 3.28084).slice(0, 5)
   }
 
   compactCoords = [
