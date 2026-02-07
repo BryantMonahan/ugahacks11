@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "cd backend && npm run start"
+    "start": "concurrently \"cd backend && npm run start\"  \"cd frontend && npm run dev\" -c red,blue -n SERVER,CLIENT"
   },
   "repository": {
     "type": "git",
@@ -17,5 +17,8 @@
   "bugs": {
     "url": "https://github.com/BryantMonahan/ugahacks11/issues"
   },
-  "homepage": "https://github.com/BryantMonahan/ugahacks11#readme"
+  "homepage": "https://github.com/BryantMonahan/ugahacks11#readme",
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
 }
