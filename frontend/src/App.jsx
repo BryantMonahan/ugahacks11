@@ -39,13 +39,18 @@ function App() {
   const fetchWasteCenters = async (lat, lng) => {
     setLoading(true)
     setError(null)
-    
+
     try {
       const query = searchQuery.trim() ? `&query=${encodeURIComponent(searchQuery.trim())}` : ''
       // Use smaller radius for closer results
       const response = await fetch(`http://localhost:8083/rest/places/waste-centers?lat=${lat}&lng=${lng}&radius=5000${query}`)
       const data = await response.json()
-      
+
+      // console.log('breakpoint', lat, lng)
+      // const response2 = await fetch(`http://localhost:8083/rest/places/nearest-compactor?lat=${lat}&lng=${lng}${query}`)
+      // const data2 = await response2.json()
+      // console.log(data2)
+
       if (data.error) {
         setError(data.error)
       } else {
@@ -70,7 +75,7 @@ function App() {
   return (
     <div>
       <h1>Waste Center Finder</h1>
-      
+
       <label>Search for specific waste type (optional):</label>
       <input
         type="text"
@@ -91,7 +96,7 @@ function App() {
       {mapReady ? (
         <MapComponent places={places} userLocation={userLocation} />
       ) : (
-        <div style={{width: '100%', height: '400px', backgroundColor: '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #ddd'}}>
+        <div style={{ width: '100%', height: '400px', backgroundColor: '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #ddd' }}>
           <p>Loading map...</p>
         </div>
       )}
@@ -101,7 +106,7 @@ function App() {
           <h2>
             {searchQuery.trim() ? `Results for "${searchQuery}"` : 'All Waste Centers'} - {places.length} found
           </h2>
-          
+
           <h3>Locations List:</h3>
           <DisplayPlaces places={places} />
         </div>
