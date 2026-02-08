@@ -31,7 +31,7 @@ const loadGoogleMaps = (apiKey) => {
       // Create new script
       const script = document.createElement('script');
       script.id = 'google-maps-js';
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,marker&loading=async`;
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,marker,geometry&loading=async`;
       script.async = true;
       script.defer = true;
       
@@ -65,6 +65,57 @@ function MapComponent({ places, userLocation, routeData }) {
   const [markers, setMarkers] = useState([]);
   const [compactors, setCompactors] = useState([]);
   const [routePolyline, setRoutePolyline] = useState(null);
+
+  const createMarker = ({ position, title, color, type }) => {
+    const pinElement = new google.maps.marker.PinElement({
+      background: color,
+      borderColor: "#ffffff",
+      glyphColor: "#ffffff"
+    });
+
+    const marker = new google.maps.marker.AdvancedMarkerElement({
+      position,
+      map,
+      title,
+      content: pinElement
+    });
+
+    marker.markerType = type;
+    return marker;
+  };
+
+  const attachInfoWindow = (marker, html) => {
+    const infoWindow = new google.maps.InfoWindow({ content: html });
+    marker.addListener('gmp-click', () => {
+      infoWindow.open(map, marker);
+    });
+  };
+
+  const fitBoundsSafe = (bounds, padding) => {
+    if (!bounds || bounds.isEmpty()) return;
+    try {
+      map.fitBounds(bounds, padding ? { padding } : undefined);
+    } catch (error) {
+      console.warn('Could not fit bounds:', error);
+    }
+  };
+
+  const getRouteBounds = (route) => {
+    if (!route?.bounds) return null;
+    return new google.maps.LatLngBounds(
+      new google.maps.LatLng(route.bounds.southwest.lat, route.bounds.southwest.lng),
+      new google.maps.LatLng(route.bounds.northeast.lat, route.bounds.northeast.lng)
+    );
+  };
+
+  const getMarkerLatLng = (marker) => {
+    const position = marker?.position;
+    if (!position) return null;
+    const lat = typeof position.lat === 'function' ? position.lat() : position.lat;
+    const lng = typeof position.lng === 'function' ? position.lng() : position.lng;
+    if (typeof lat !== 'number' || typeof lng !== 'number') return null;
+    return { lat, lng };
+  };
 
   useEffect(() => {
     const initMap = async () => {
@@ -117,37 +168,6 @@ function MapComponent({ places, userLocation, routeData }) {
 
 
 
-  // Function to decode Google's encoded polyline
-  const decodePolyline = (encoded) => {
-    let points = [];
-    let index = 0, len = encoded.length;
-    let lat = 0, lng = 0;
-
-    while (index < len) {
-      let b, shift = 0, result = 0;
-      do {
-        b = encoded.charCodeAt(index++) - 63;
-        result |= (b & 0x1f) << shift;
-        shift += 5;
-      } while (b >= 0x20);
-      let dlat = ((result & 1) ? ~(result >> 1) : (result >> 1));
-      lat += dlat;
-
-      shift = 0;
-      result = 0;
-      do {
-        b = encoded.charCodeAt(index++) - 63;
-        result |= (b & 0x1f) << shift;
-        shift += 5;
-      } while (b >= 0x20);
-      let dlng = ((result & 1) ? ~(result >> 1) : (result >> 1));
-      lng += dlng;
-
-      points.push({ lat: lat / 1E5, lng: lng / 1E5 });
-    }
-    return points;
-  };
-
   // Display route when routeData changes
   useEffect(() => {
     if (!map) return;
@@ -162,7 +182,9 @@ function MapComponent({ places, userLocation, routeData }) {
       const route = routeData.route.routes?.[0];
       if (route?.overview_polyline?.points) {
         // Decode the polyline and create route
-        const path = decodePolyline(route.overview_polyline.points);
+        const path = google.maps.geometry.encoding.decodePath(
+          route.overview_polyline.points
+        );
         
         const polyline = new google.maps.Polyline({
           path: path,
@@ -176,34 +198,14 @@ function MapComponent({ places, userLocation, routeData }) {
         setRoutePolyline(polyline);
         
         // Zoom to fit the route bounds regardless of destination type
-        if (route?.bounds) {
-          try {
-            const bounds = new google.maps.LatLngBounds(
-              new google.maps.LatLng(route.bounds.southwest.lat, route.bounds.southwest.lng),
-              new google.maps.LatLng(route.bounds.northeast.lat, route.bounds.northeast.lng)
-            );
-            map.fitBounds(bounds, { padding: 50 });
-          } catch (error) {
-            console.warn('Could not fit route bounds:', error);
-          }
-        }
+        fitBoundsSafe(getRouteBounds(route), 50);
       }
       
       // If routing to a compactor, hide waste center markers with smooth transition  
       if (routeData.destination?.type === 'compactor') {
         // First start the zoom transition
         const route = routeData.route.routes?.[0];
-        if (route?.bounds) {
-          try {
-            const bounds = new google.maps.LatLngBounds(
-              new google.maps.LatLng(route.bounds.southwest.lat, route.bounds.southwest.lng),
-              new google.maps.LatLng(route.bounds.northeast.lat, route.bounds.northeast.lng)
-            );
-            map.fitBounds(bounds, { padding: 50 });
-          } catch (error) {
-            console.warn('Could not fit route bounds:', error);
-          }
-        }
+        fitBoundsSafe(getRouteBounds(route), 50);
         
         // Hide waste center markers with a slight delay for smoother transition
         setTimeout(() => {
@@ -231,59 +233,35 @@ function MapComponent({ places, userLocation, routeData }) {
     // Add user location marker
     const newMarkers = [];
     if (userLocation && userLocation.lat && userLocation.lng) {
-      const pinElement = new google.maps.marker.PinElement({
-        background: "#4285F4",
-        borderColor: "#ffffff",
-        glyphColor: "#ffffff"
-      });
-      
-      const userMarker = new google.maps.marker.AdvancedMarkerElement({
-        position: userLocation,
-        map: map,
-        title: 'Your Location',
-        content: pinElement
-      });
-      
-      // Add type identifier
-      userMarker.markerType = 'user-location';
-      newMarkers.push(userMarker);
+      newMarkers.push(
+        createMarker({
+          position: userLocation,
+          title: 'Your Location',
+          color: "#4285F4",
+          type: 'user-location'
+        })
+      );
     }
 
     // Add compactor markers (orange/yellow)
     compactors.forEach((compactor) => {
-      const pinElement = new google.maps.marker.PinElement({
-        background: "#FF9800",
-        borderColor: "#ffffff",
-        glyphColor: "#ffffff"
-      });
-      
-      const marker = new google.maps.marker.AdvancedMarkerElement({
-        position: {
-          lat: compactor.lat,
-          lng: compactor.lng
-        },
-        map: map,
+      const marker = createMarker({
+        position: { lat: compactor.lat, lng: compactor.lng },
         title: compactor.name,
-        content: pinElement
+        color: "#FF9800",
+        type: 'compactor'
       });
-      
-      // Add type identifier
-      marker.markerType = 'compactor';
 
-      // Add info window for compactors
-      const infoWindow = new google.maps.InfoWindow({
-        content: `
+      attachInfoWindow(
+        marker,
+        `
           <div>
             <strong>${compactor.name}</strong><br>
             <em>Compactor Location</em><br>
             Coordinates: ${compactor.lat.toFixed(6)}, ${compactor.lng.toFixed(6)}
           </div>
         `
-      });
-
-      marker.addListener('gmp-click', () => {
-        infoWindow.open(map, marker);
-      });
+      );
 
       newMarkers.push(marker);
     });
@@ -299,28 +277,16 @@ function MapComponent({ places, userLocation, routeData }) {
           : place.geometry?.location?.lng;
 
         if (latValue && lngValue) {
-          const pinElement = new google.maps.marker.PinElement({
-            background: "#EA4335",
-            borderColor: "#ffffff",
-            glyphColor: "#ffffff"
-          });
-          
-          const marker = new google.maps.marker.AdvancedMarkerElement({
-            position: {
-              lat: latValue,
-              lng: lngValue
-            },
-            map: map,
+          const marker = createMarker({
+            position: { lat: latValue, lng: lngValue },
             title: place.name,
-            content: pinElement
+            color: "#EA4335",
+            type: 'waste-center'
           });
-          
-          // Add type identifier to marker
-          marker.markerType = 'waste-center';
 
-          // Add info window
-          const infoWindow = new google.maps.InfoWindow({
-            content: `
+          attachInfoWindow(
+            marker,
+            `
               <div>
                 <strong>${place.name}</strong><br>
                 ${place.vicinity || place.formatted_address}<br>
@@ -328,11 +294,7 @@ function MapComponent({ places, userLocation, routeData }) {
                 ${place.opening_hours ? `<br>${place.opening_hours.open_now ? 'Open Now' : 'Closed'}` : ''}
               </div>
             `
-          });
-
-          marker.addListener('gmp-click', () => {
-            infoWindow.open(map, marker);
-          });
+          );
 
           newMarkers.push(marker);
         }
@@ -343,21 +305,14 @@ function MapComponent({ places, userLocation, routeData }) {
 
     // Fit map to show all markers with better bounds handling
     if (newMarkers.length > 0) {
-      try {
-        const bounds = new google.maps.LatLngBounds();
-        newMarkers.forEach(marker => {
-          // Ensure position is valid before extending bounds
-          if (marker.position && marker.position.lat && marker.position.lng) {
-            bounds.extend(new google.maps.LatLng(marker.position.lat, marker.position.lng));
-          }
-        });
-        
-        if (!bounds.isEmpty()) {
-          map.fitBounds(bounds);
+      const bounds = new google.maps.LatLngBounds();
+      newMarkers.forEach(marker => {
+        const position = getMarkerLatLng(marker);
+        if (position) {
+          bounds.extend(new google.maps.LatLng(position.lat, position.lng));
         }
-      } catch (error) {
-        console.error('Error fitting bounds:', error);
-      }
+      });
+      fitBoundsSafe(bounds);
     }
   }, [map, places, userLocation, compactors]);
 
